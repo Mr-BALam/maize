@@ -63,8 +63,8 @@ def sync_to_mysql():
             db.commit()
 
 # ----------------- EMAIL CONFIG -----------------
-EMAIL_ADDRESS = "mrbal8824@gmail.com"
-EMAIL_PASSWORD = "grwm qhez xftq maxx"
+EMAIL_ADDRESS = "innotech.company.tz@gmail.com"
+EMAIL_PASSWORD = "udch qjsl rghu xmev"
 
 def send_confirmation_email(recipient, code):
     try:
