@@ -329,7 +329,6 @@ else:
         })
         yearly_avg = pd.concat([yearly_avg, predicted_row], ignore_index=True)
 
-        st.markdown("### 📅 Yearly Averages and Prediction for Next Year")
 
         # Plot 2 charts side by side in each row
         for i in range(0, len(features), 2):
@@ -337,7 +336,7 @@ else:
 
             def render_chart(col, feature):
                 with col:
-                    st.markdown(f"#### 📈 {feature.replace('_', ' ')} vs Price")
+                    st.markdown(f" {feature.replace('_', ' ')} vs Price")
                     options = {
                         "tooltip": {"trigger": "axis"},
                         "legend": {"data": [feature, "Price (Tsh/kg)"]},
