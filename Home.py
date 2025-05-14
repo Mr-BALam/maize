@@ -12,7 +12,8 @@ import bcrypt
 import random
 import smtplib
 from email.message import EmailMessage
-
+import json
+import os
 # ----------------- DATABASE CONNECTION SETUP -----------------
 db_connected = False
 db = None
@@ -297,10 +298,9 @@ else:
     elif st.session_state.page == "Historical Data":
         st.subheader("📊 Historical Data")
         # Load model and training data
-        with open("model.pkl", "rb") as f:
-            saved = pickle.load(f)
-            model = saved["model"]
-            data = saved["data"]
+        saved = joblib.load("model.pkl")
+        model = saved["model"]
+        data = saved["data"]
 
         features = ['Rainfall_mm', 'Total_Production_MT', 'Mbeya_Population']
         target = 'Cost_Tsh_per_kg'
