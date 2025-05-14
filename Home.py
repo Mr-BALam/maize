@@ -14,6 +14,8 @@ import smtplib
 from email.message import EmailMessage
 import json
 import os
+from sklearn.linear_model import LinearRegression  # or whatever model you used
+
 # ----------------- DATABASE CONNECTION SETUP -----------------
 db_connected = False
 db = None
