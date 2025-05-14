@@ -1,35 +1,62 @@
 import streamlit as st
-from datetime import date, datetime
+from datetime import datetime
 import joblib
 import numpy as np
-import pickle
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from streamlit_echarts import st_echarts
-import mysql.connector
+import json
+import os
 import bcrypt
 import random
 import smtplib
 from email.message import EmailMessage
+import mysql.connector
 
-# Load model once
-@st.cache_resource
-def load_model():
-    return joblib.load("model.pkl")
+# ----------------- DATABASE CONNECTION SETUP -----------------
+db_connected = False
+db = None
+cursor = None
 
-model = load_model()
-# ---------------- DATABASE CONFIG ----------------
-db = mysql.connector.connect(
-    host="192.168.1.150",
-    user="root",       # adjust if you've changed default
-    password="king",       # your MySQL password
-    database="agri_users"
-)
-cursor = db.cursor(dictionary=True)
+try:
+    db = mysql.connector.connect(
+        host="192.168.1.150",
+        user="root",
+        password="king",
+        database="agri_users",
+        connection_timeout=3
+    )
+    cursor = db.cursor(dictionary=True)
+    db_connected = True
+except Exception as e:
+    st.warning("MySQL not connected, falling back to JSON.")
+    db_connected = False
 
+# ----------------- LOCAL JSON STORAGE -----------------
+DATA_FILE = "data.json"
 
-# ---------------- EMAIL SENDER CONFIG ----------------
+def read_local_data():
+    if not os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "w") as f:
+            json.dump({"users": []}, f)
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def write_local_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def sync_to_mysql():
+    if not db_connected:
+        return
+    local_data = read_local_data()
+    for user in local_data.get("users", []):
+        cursor.execute("SELECT * FROM users WHERE email=%s", (user["email"],))
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, confirmation_code, confirmed) VALUES (%s, %s, %s, %s)",
+                (user["email"], user["password_hash"], user["confirmation_code"], user.get("confirmed", False))
+            )
+            db.commit()
+
+# ----------------- EMAIL CONFIG -----------------
 EMAIL_ADDRESS = "mrbal8824@gmail.com"
 EMAIL_PASSWORD = "grwm qhez xftq maxx"
 
@@ -49,40 +76,76 @@ def send_confirmation_email(recipient, code):
         st.error(f"Email sending failed: {e}")
         return False
 
-# ---------------- AUTH FUNCTIONS ----------------
+# ----------------- AUTH FUNCTIONS -----------------
 def register_user(email, password):
     code = str(random.randint(100000, 999999))
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-    try:
-        cursor.execute("INSERT INTO users (email, password_hash, confirmation_code) VALUES (%s, %s, %s)",
-                       (email, password_hash, code))
-        db.commit()
+    if db_connected:
+        try:
+            cursor.execute("INSERT INTO users (email, password_hash, confirmation_code) VALUES (%s, %s, %s)",
+                           (email, password_hash, code))
+            db.commit()
+            send_confirmation_email(email, code)
+            return True
+        except mysql.connector.errors.IntegrityError:
+            st.warning("Email already registered.")
+            return False
+    else:
+        data = read_local_data()
+        if any(u["email"] == email for u in data["users"]):
+            st.warning("Email already registered locally.")
+            return False
+        data["users"].append({
+            "email": email,
+            "password_hash": password_hash,
+            "confirmation_code": code,
+            "confirmed": False
+        })
+        write_local_data(data)
         send_confirmation_email(email, code)
         return True
-    except mysql.connector.errors.IntegrityError:
-        st.warning("Email already registered.")
-        return False
 
 def confirm_user(email, code):
-    cursor.execute("SELECT * FROM users WHERE email = %s AND confirmation_code = %s", (email, code))
-    if cursor.fetchone():
-        cursor.execute("UPDATE users SET confirmed = TRUE WHERE email = %s", (email,))
-        db.commit()
-        return True
-    return False
+    if db_connected:
+        cursor.execute("SELECT * FROM users WHERE email = %s AND confirmation_code = %s", (email, code))
+        if cursor.fetchone():
+            cursor.execute("UPDATE users SET confirmed = TRUE WHERE email = %s", (email,))
+            db.commit()
+            return True
+        return False
+    else:
+        data = read_local_data()
+        for user in data["users"]:
+            if user["email"] == email and user["confirmation_code"] == code:
+                user["confirmed"] = True
+                write_local_data(data)
+                return True
+        return False
 
 def authenticate_user(email, password):
-    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-    user = cursor.fetchone()
-    if user and bcrypt.checkpw(password.encode(), user['password_hash'].encode()):
-        if user["confirmed"]:
+    if db_connected:
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
+    else:
+        data = read_local_data()
+        user = next((u for u in data["users"] if u["email"] == email), None)
+
+    if user and bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
+        if user.get("confirmed"):
             return True
         else:
             st.warning("Account not confirmed. Check your email.")
     return False
 
-# ---------------- STREAMLIT AUTH INTERFACE ----------------
+# ----------------- MODEL LOADING -----------------
+@st.cache_resource
+def load_model():
+    return joblib.load("model.pkl")
+
+model = load_model()
+
+# ----------------- STREAMLIT UI -----------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "registration_email" not in st.session_state:
@@ -117,6 +180,8 @@ if not st.session_state.authenticated:
             if authenticate_user(email, password):
                 st.session_state.authenticated = True
                 st.session_state.user_email = email
+                if db_connected:
+                    sync_to_mysql()
             else:
                 st.error("Login failed.")
 
