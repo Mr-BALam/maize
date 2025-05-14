@@ -16,7 +16,7 @@ import json
 import os
 from sklearn.linear_model import LinearRegression  # or whatever model you used
 
-# ----------------- DATABASE CONNECTION SETUP -----------------
+# ----------------- DATABASE CONNECTION -----------------
 db_connected = False
 db = None
 cursor = None
@@ -31,11 +31,11 @@ try:
     )
     cursor = db.cursor(dictionary=True)
     db_connected = True
-except Exception as e:
+except:
     st.warning("MySQL not connected, falling back to JSON.")
     db_connected = False
 
-# ----------------- LOCAL JSON STORAGE -----------------
+# ----------------- LOCAL JSON -----------------
 DATA_FILE = "data.json"
 
 def read_local_data():
@@ -82,6 +82,22 @@ def send_confirmation_email(recipient, code):
         return True
     except Exception as e:
         st.error(f"Email sending failed: {e}")
+        return False
+
+def send_reset_code_email(recipient, reset_code):
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = "AgriPrice Password Reset Code"
+        msg["From"] = EMAIL_ADDRESS
+        msg["To"] = recipient
+        msg.set_content(f"Use this code to reset your password: {reset_code}")
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+        return True
+    except Exception as e:
+        st.error(f"Failed to send reset code: {e}")
         return False
 
 # ----------------- AUTH FUNCTIONS -----------------
@@ -146,13 +162,24 @@ def authenticate_user(email, password):
             st.warning("Account not confirmed. Check your email.")
     return False
 
+def update_user_password(email, new_password):
+    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    if db_connected:
+        cursor.execute("UPDATE users SET password_hash=%s WHERE email=%s", (hashed, email))
+        db.commit()
+    else:
+        data = read_local_data()
+        for user in data["users"]:
+            if user["email"] == email:
+                user["password_hash"] = hashed
+        write_local_data(data)
+
 # ----------------- MODEL LOADING -----------------
 @st.cache_resource
 def load_model():
     return joblib.load("model.pkl")
 
 model = load_model()
-# Load model and training data
 saved = joblib.load("model.pkl")
 model = saved["model"]
 data = saved["data"]
@@ -161,9 +188,13 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "registration_email" not in st.session_state:
     st.session_state.registration_email = ""
+if "reset_email" not in st.session_state:
+    st.session_state.reset_email = ""
+if "reset_code_sent" not in st.session_state:
+    st.session_state.reset_code_sent = False
 
 if not st.session_state.authenticated:
-    menu = st.sidebar.selectbox("Login / Register", ["Login", "Register"])
+    menu = st.sidebar.selectbox("Login / Register", ["Login", "Register", "Reset Password"])
 
     if menu == "Register":
         st.title("🔐 Register")
@@ -195,6 +226,40 @@ if not st.session_state.authenticated:
                     sync_to_mysql()
             else:
                 st.error("Login failed.")
+        if st.button("Forgot Password?"):
+            st.session_state.reset_email = st.text_input("Enter your registered email")
+            if st.button("Send Reset Code"):
+                reset_code = str(random.randint(100000, 999999))
+                st.session_state.generated_code = reset_code
+                if send_reset_code_email(st.session_state.reset_email, reset_code):
+                    st.success("Reset code sent to your email.")
+                    st.session_state.reset_code_sent = True
+
+    elif menu == "Reset Password":
+        st.title("🔁 Reset Password")
+        email = st.text_input("Enter your email")
+        if st.button("Send Reset Code"):
+            code = str(random.randint(100000, 999999))
+            st.session_state.reset_email = email
+            st.session_state.generated_code = code
+            if send_reset_code_email(email, code):
+                st.success("Reset code sent to email.")
+                st.session_state.reset_code_sent = True
+
+        if st.session_state.reset_code_sent:
+            input_code = st.text_input("Enter reset code")
+            new_pass = st.text_input("New Password", type="password")
+            confirm_pass = st.text_input("Confirm New Password", type="password")
+            if st.button("Reset Password"):
+                if input_code == st.session_state.generated_code:
+                    if new_pass == confirm_pass:
+                        update_user_password(st.session_state.reset_email, new_pass)
+                        st.success("Password reset successful. You can now login.")
+                        st.session_state.reset_code_sent = False
+                    else:
+                        st.error("Passwords do not match.")
+                else:
+                    st.error("Invalid reset code.")
 
 else:
     if "page" not in st.session_state:
