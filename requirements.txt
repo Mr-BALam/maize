@@ -8,3 +8,6 @@ pickle-mixin
 streamlit-echarts
 mysql-connector-python
 bcrypt
+scikit-learn
+mysql-connector-python
+streamlit-echarts
