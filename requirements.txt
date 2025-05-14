@@ -1,0 +1,10 @@
+streamlit
+numpy
+pandas
+matplotlib
+seaborn
+joblib
+pickle-mixin
+streamlit-echarts
+mysql-connector-python
+bcrypt
