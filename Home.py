@@ -23,7 +23,7 @@ cursor = None
 
 try:
     db = mysql.connector.connect(
-        host="192.168.1.150",
+        host="localhost",
         user="root",
         password="king",
         database="agri_users",
@@ -63,8 +63,10 @@ def sync_to_mysql():
             db.commit()
 
 # ----------------- EMAIL CONFIG -----------------
-EMAIL_ADDRESS = "innotech.company.tz@gmail.com"
-EMAIL_PASSWORD = "udch qjsl rghu xmev"
+EMAIL_ADDRESS = "mrbal8824@gmail.com"
+EMAIL_PASSWORD = "wyfs apkq zjlh kdxr"
+# EMAIL_ADDRESS = "innotech.company.tz@gmail.com"
+# EMAIL_PASSWORD = "udch qjsl rghu xmev"
 
 def send_confirmation_email(recipient, code):
     try:
