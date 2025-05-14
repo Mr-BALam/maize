@@ -150,7 +150,10 @@ def load_model():
     return joblib.load("model.pkl")
 
 model = load_model()
-
+# Load model and training data
+saved = joblib.load("model.pkl")
+model = saved["model"]
+data = saved["data"]
 # ----------------- STREAMLIT UI -----------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -284,11 +287,9 @@ else:
         st.markdown("#### Factors influencing Price")
         factors = {
             "🌧️ Rainfall": True,
-            "🌡️ Temperature": True,
             "🚜 Agriculture inputs": True,
-            "📈 Market Demand": True,
+            "📈 Population": True,
             "🌐 Global Trade": True,
-            "✅ Economic Indicators": True
         }
         st.markdown("<div style='background-color: #F9F9F9; padding: 15px; border-radius: 10px;'>", unsafe_allow_html=True)
         cols = st.columns(3)
@@ -299,10 +300,6 @@ else:
 
     elif st.session_state.page == "Historical Data":
         st.subheader("📊 Historical Data")
-        # Load model and training data
-        saved = joblib.load("model.pkl")
-        model = saved["model"]
-        data = saved["data"]
 
         features = ['Rainfall_mm', 'Total_Production_MT', 'Mbeya_Population']
         target = 'Cost_Tsh_per_kg'
