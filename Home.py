@@ -126,7 +126,7 @@ def register_user(email, password):
         })
         write_local_data(data)
         # send_confirmation_email(email, code)
-        return True
+        return True, code
 
 def confirm_user(email, code):
     if db_connected:
